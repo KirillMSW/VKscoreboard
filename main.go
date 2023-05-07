@@ -10,7 +10,18 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
+	"sort"
 )
+
+type userInfo struct {
+	Login          string
+	RelativeWeb    int
+	RelativeStego  int
+	RelativeCrypto int
+	Web            int
+	Stego          int
+	Crypto         int
+}
 
 var store = sessions.NewCookieStore([]byte("SECRET"))
 var db *sql.DB
@@ -22,6 +33,7 @@ func main() {
 	router.POST("/api/login", login)
 	router.POST("/api/register", register)
 	router.GET("/api/secret", secret)
+	router.GET("/api/scoreboard", getScoreboard)
 	router.Run("localhost:8080")
 }
 
@@ -89,7 +101,7 @@ func register(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = db.Exec("INSERT INTO users VALUES (?,?)", login, hash)
+	_, err = db.Exec("INSERT INTO users (login, password) VALUES (?,?)", login, hash)
 	if err != nil {
 
 	}
@@ -106,4 +118,57 @@ func secret(c *gin.Context) {
 
 	fmt.Printf("okay")
 	c.String(200, "flag{qwert}")
+}
+
+func getScoreboard(c *gin.Context) {
+
+	result, err := db.Query("SELECT * FROM  tasks")
+
+	categoriesAmount := make(map[string]int)
+	for result.Next() {
+		var task string
+		var amount int
+		err = result.Scan(&task, &amount)
+		if err != nil {
+			log.Fatal(err)
+		}
+		categoriesAmount[task] = amount
+	}
+	result, err = db.Query("SELECT login, web_solved, stego_solved, crypto_solved FROM users")
+	var users []userInfo
+	for result.Next() {
+		var scanUser userInfo
+		err = result.Scan(&scanUser.Login, &scanUser.Web, &scanUser.Stego, &scanUser.Crypto)
+		if err != nil {
+			log.Fatal(err)
+		}
+		users = append(users, scanUser)
+	}
+
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Web > users[j].Web
+	})
+	for i, _ := range users {
+		users[i].RelativeWeb = i + 1
+	}
+
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Stego > users[j].Stego
+	})
+	for i, _ := range users {
+		users[i].RelativeStego = i + 1
+	}
+
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Crypto > users[j].Crypto
+	})
+	for i, _ := range users {
+		users[i].RelativeCrypto = i + 1
+	}
+
+	respStruct := struct {
+		TasksInfo map[string]int
+		UsersInfo []userInfo
+	}{categoriesAmount, users}
+	c.JSON(200, respStruct)
 }
