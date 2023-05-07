@@ -103,7 +103,7 @@ func register(c *gin.Context) {
 	}
 	_, err = db.Exec("INSERT INTO users (login, password) VALUES (?,?)", login, hash)
 	if err != nil {
-
+		fmt.Println("error")
 	}
 
 }
